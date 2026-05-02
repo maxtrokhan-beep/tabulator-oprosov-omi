@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import uuid
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile
@@ -15,6 +16,9 @@ from app.core.session_store import SESSION_COOKIE, store
 from app.core.tabulator import build_metadata, tabulate
 
 app = FastAPI(title="MVP Табулятор опросов", version="0.1.0")
+
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
 
 
 @app.middleware("http")
@@ -33,12 +37,12 @@ async def ensure_session(request: Request, call_next):
     return await call_next(request)
 
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.get("/")
 def index():
-    return FileResponse("app/static/index.html")
+    return FileResponse(str(STATIC_DIR / "index.html"))
 
 
 def _sid(request: Request) -> str:
