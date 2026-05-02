@@ -101,7 +101,7 @@
           <div class="modal-body">
             <div class="row between">
               <h3 id="scale-modal-title">Шкала</h3>
-              <button class="btn" id="btn-scale-close">Закрыть</button>
+              <button class="btn" id="btn-scale-close" type="button" onclick="closeScaleModal()">Закрыть</button>
             </div>
             <div class="muted small">Сопоставьте текстовые лейблы с числовыми кодами (например 1..5).</div>
             <div id="scale-map"></div>
@@ -123,7 +123,7 @@
               <input class="input" id="top2-manual" placeholder="например 4,5" />
             </div>
             <div class="row">
-              <button class="btn primary" id="btn-scale-save">Сохранить шкалу</button>
+              <button class="btn primary" id="btn-scale-save" type="button" onclick="saveScaleModal()">Сохранить шкалу</button>
             </div>
           </div>
         </div>
