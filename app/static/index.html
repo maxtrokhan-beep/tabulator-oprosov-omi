@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MVP Табулятор опросов</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="header">
+        <div>
+          <div class="title">MVP Табулятор маркетинговых опросов</div>
+          <div class="subtitle">Загрузите Excel/CSV, настройте переменные, постройте кросс-таблицы и скачайте Excel.</div>
+        </div>
+        <div class="status" id="status"></div>
+      </header>
+
+      <nav class="tabs">
+        <button class="tab active" data-screen="upload">1) Загрузка</button>
+        <button class="tab" data-screen="vars">2) Настройка переменных</button>
+        <button class="tab" data-screen="tab">3) Табуляция</button>
+      </nav>
+
+      <section class="screen" id="screen-upload">
+        <div class="card">
+          <h2>Загрузка базы</h2>
+          <p class="muted">
+            Формат: 1-я строка = тех. имена, 2-я = текст вопроса, 3-я пустая, с 4-й ответы.
+            Поддержка: <b>.xlsx</b> / <b>.csv</b>. Если есть колонка <code>weight</code>, станет доступна взвешенная табуляция.
+          </p>
+
+          <div class="row">
+            <input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv" />
+            <button class="btn primary" id="btn-upload">Загрузить</button>
+          </div>
+          <div id="upload-result" class="muted"></div>
+        </div>
+      </section>
+
+      <section class="screen hidden" id="screen-vars">
+        <div class="card">
+          <h2>Настройка переменных</h2>
+          <p class="muted">
+            Отметьте тип переменной. Для шкал — задайте соответствие «лейбл → код» и правило Top‑2 box.
+            Для множественного выбора — объедините несколько колонок в один вопрос (например, Q5_1..Q5_3 → Q5).
+          </p>
+
+          <div class="row">
+            <button class="btn" id="btn-load-meta">Обновить список переменных</button>
+            <button class="btn primary" id="btn-save-config">Сохранить настройки</button>
+          </div>
+
+          <div class="grid2">
+            <div>
+              <h3>Переменные</h3>
+              <input class="input" id="var-search" placeholder="Поиск по имени или тексту вопроса..." />
+              <div class="tablewrap">
+                <table class="table" id="vars-table">
+                  <thead>
+                    <tr>
+                      <th>Переменная</th>
+                      <th>Вопрос</th>
+                      <th>Уникальные значения</th>
+                      <th>Тип</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div>
+              <h3>Множественный выбор</h3>
+              <div class="card inner">
+                <div class="row">
+                  <input class="input" id="mc-name" placeholder="Имя группы (например Q5)" />
+                  <button class="btn" id="btn-mc-suggest">Подсказать по префиксу</button>
+                </div>
+                <input class="input" id="mc-question" placeholder="Текст вопроса (необязательно)" />
+                <div class="muted small">Выберите колонки‑варианты:</div>
+                <div class="mc-cols" id="mc-cols"></div>
+                <div class="row">
+                  <button class="btn primary" id="btn-mc-add">Добавить группу</button>
+                </div>
+              </div>
+
+              <div class="card inner">
+                <div class="row between">
+                  <div><b>Список групп</b></div>
+                  <button class="btn danger" id="btn-mc-clear">Очистить</button>
+                </div>
+                <div id="mc-groups" class="muted"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal hidden" id="scale-modal">
+          <div class="modal-body">
+            <div class="row between">
+              <h3 id="scale-modal-title">Шкала</h3>
+              <button class="btn" id="btn-scale-close">Закрыть</button>
+            </div>
+            <div class="muted small">Сопоставьте текстовые лейблы с числовыми кодами (например 1..5).</div>
+            <div id="scale-map"></div>
+
+            <hr />
+            <h4>Top‑2 box</h4>
+            <div class="row">
+              <label class="radio">
+                <input type="radio" name="top2mode" value="top_n" checked />
+                Верхние N значений
+              </label>
+              <input class="input small" id="top2-n" type="number" min="1" value="2" />
+            </div>
+            <div class="row">
+              <label class="radio">
+                <input type="radio" name="top2mode" value="manual" />
+                Вручную (коды через запятую)
+              </label>
+              <input class="input" id="top2-manual" placeholder="например 4,5" />
+            </div>
+            <div class="row">
+              <button class="btn primary" id="btn-scale-save">Сохранить шкалу</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen hidden" id="screen-tab">
+        <div class="card">
+          <h2>Табуляция</h2>
+          <div class="grid2">
+            <div>
+              <h3>Строки (вопросы)</h3>
+              <div id="rows-list" class="list"></div>
+            </div>
+            <div>
+              <h3>Колонки (баннеры / разрезы)</h3>
+              <div id="banners-list" class="list"></div>
+              <div class="muted small">Можно выбрать несколько переменных — колонки будут вложенными (декартово произведение).</div>
+            </div>
+          </div>
+
+          <h3>Фильтры</h3>
+          <div id="filters"></div>
+          <div class="row">
+            <button class="btn" id="btn-filter-add">Добавить фильтр</button>
+          </div>
+
+          <div class="row between">
+            <div class="row">
+              <label class="switch">
+                <input type="checkbox" id="show-sig" />
+                <span>Показывать статзначимость (90%)</span>
+              </label>
+            </div>
+            <div class="row">
+              <button class="btn" id="btn-run-unw">Построить невзвешенные таблицы</button>
+              <button class="btn" id="btn-run-w" disabled>Построить взвешенные таблицы</button>
+              <button class="btn primary" id="btn-export" disabled>Скачать Excel</button>
+            </div>
+          </div>
+
+          <div id="tab-note" class="muted small"></div>
+        </div>
+
+        <div class="card">
+          <h3>Результат</h3>
+          <div class="tablewrap" id="result"></div>
+        </div>
+      </section>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
