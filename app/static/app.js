@@ -274,6 +274,10 @@ function saveScaleModal() {
   closeScaleModal();
 }
 
+// Делаем функции доступными из HTML-атрибутов (на случай CSP/особенностей браузера)
+window.closeScaleModal = closeScaleModal;
+window.saveScaleModal = saveScaleModal;
+
 async function loadMetadata() {
   setStatus("Читаю метаданные...");
   const data = await apiJson("/api/metadata");
@@ -521,44 +525,49 @@ function escapeAttr(s) {
   return escapeHtml(s).replaceAll("`", "");
 }
 
-// Tabs
-document.querySelectorAll(".tab").forEach((btn) => {
-  btn.addEventListener("click", () => showScreen(btn.dataset.screen));
+window.addEventListener("DOMContentLoaded", () => {
+  // Tabs
+  document.querySelectorAll(".tab").forEach((btn) => {
+    btn.addEventListener("click", () => showScreen(btn.dataset.screen));
+  });
+
+  // Upload
+  $("btn-upload").addEventListener("click", uploadFile);
+
+  // Vars
+  $("btn-load-meta").addEventListener("click", loadMetadata);
+  $("btn-save-config").addEventListener("click", saveConfig);
+  $("var-search").addEventListener("input", renderVarsTable);
+
+  // Multi
+  $("btn-mc-suggest").addEventListener("click", suggestMcByPrefix);
+  $("btn-mc-add").addEventListener("click", addMcGroup);
+  $("btn-mc-clear").addEventListener("click", clearMcGroups);
+
+  // Scale modal
+  $("btn-scale-close").addEventListener("click", closeScaleModal);
+  $("btn-scale-save").addEventListener("click", saveScaleModal);
+  $("scale-modal").addEventListener("click", (e) => {
+    if (e.target?.id === "scale-modal") closeScaleModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeScaleModal();
+  });
+
+  // Filters
+  $("btn-filter-add").addEventListener("click", addFilterRow);
+
+  // Run / export
+  $("btn-run-unw").addEventListener("click", () => runTabulation(false));
+  $("btn-run-w").addEventListener("click", () => runTabulation(true));
+  $("btn-export").addEventListener("click", () => {
+    // экспортим в режиме последнего расчета, если он был, иначе — по текущему выбору (невзвешенно)
+    const weighted = state.lastResult?.meta?.weighted ?? false;
+    exportExcel(weighted);
+  });
+
+  // initial
+  showScreen("upload");
+  setStatus("Готово. Загрузите файл.");
 });
-
-// Upload
-$("btn-upload").addEventListener("click", uploadFile);
-
-// Vars
-$("btn-load-meta").addEventListener("click", loadMetadata);
-$("btn-save-config").addEventListener("click", saveConfig);
-$("var-search").addEventListener("input", renderVarsTable);
-
-// Multi
-$("btn-mc-suggest").addEventListener("click", suggestMcByPrefix);
-$("btn-mc-add").addEventListener("click", addMcGroup);
-$("btn-mc-clear").addEventListener("click", clearMcGroups);
-
-// Scale modal
-$("btn-scale-close").addEventListener("click", closeScaleModal);
-$("btn-scale-save").addEventListener("click", saveScaleModal);
-$("scale-modal").addEventListener("click", (e) => {
-  if (e.target?.id === "scale-modal") closeScaleModal();
-});
-
-// Filters
-$("btn-filter-add").addEventListener("click", addFilterRow);
-
-// Run / export
-$("btn-run-unw").addEventListener("click", () => runTabulation(false));
-$("btn-run-w").addEventListener("click", () => runTabulation(true));
-$("btn-export").addEventListener("click", () => {
-  // экспортим в режиме последнего расчета, если он был, иначе — по текущему выбору (невзвешенно)
-  const weighted = state.lastResult?.meta?.weighted ?? false;
-  exportExcel(weighted);
-});
-
-// initial
-showScreen("upload");
-setStatus("Готово. Загрузите файл.");
 
