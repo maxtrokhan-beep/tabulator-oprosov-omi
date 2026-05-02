@@ -115,6 +115,7 @@ h2, h3, h4 { margin: 8px 0 10px; }
   align-items: center;
   justify-content: center;
   padding: 14px;
+  z-index: 9999;
 }
 .modal-body {
   width: min(760px, 100%);
@@ -122,6 +123,8 @@ h2, h3, h4 { margin: 8px 0 10px; }
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 14px;
+  position: relative;
+  z-index: 10000;
 }
 hr { border: none; border-top: 1px solid var(--line); margin: 12px 0; }
 
