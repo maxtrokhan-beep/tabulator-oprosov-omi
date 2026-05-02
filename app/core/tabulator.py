@@ -372,12 +372,27 @@ def tabulate(
             add_row({"kind": "base", "label": "База ответивших", "base": base_by_seg})
 
         elif vtype == "scale":
-            # Маппинг лейбл->код (число). Если не задан — попробуем преобразовать в число.
+            # MVP-упрощение по запросу:
+            # - модального окна "Шкала" нет
+            # - Top-2 box всегда считаем как коды 4 и 5
+            #
+            # Дополнительно: если в данных шкала хранится текстовыми лейблами,
+            # автоматически кодируем их в 1..K по сортированному списку уникальных лейблов.
+            #
+            # Важно: если в шкале меньше 5 пунктов, Top-2 по (4,5) может быть пустым — это ожидаемо.
+
+            # Маппинг лейбл->код из UI игнорируем (окно убрали), но оставляем обратную совместимость:
             smap = scale_maps.get(rv, {}) or {}
-            rule = top2.get(rv, {}) or {"mode": "top_n", "n": 2, "values": []}
-            mode = rule.get("mode", "top_n")
-            n_top = int(rule.get("n", 2) or 2)
-            manual_vals = [float(x) for x in (rule.get("values") or [])]
+
+            # Подготовим авто-маппинг для строковых значений
+            ser_norm = df0[rv].apply(_normalize_value)
+            labels = [x for x in ser_norm.dropna().unique().tolist() if not isinstance(x, (int, float, np.integer, np.floating))]
+
+            def _label_key(x: Any):
+                return str(x)
+
+            labels_sorted = sorted([str(x) for x in labels], key=_label_key)
+            auto_map = {lab: float(i + 1) for i, lab in enumerate(labels_sorted)}
 
             def to_code(v: Any) -> Optional[float]:
                 v = _normalize_value(v)
@@ -388,6 +403,8 @@ def tabulate(
                 s = str(v).strip()
                 if s in smap:
                     return float(smap[s])
+                if s in auto_map:
+                    return float(auto_map[s])
                 # если маппинг не задан, пробуем парсить число
                 try:
                     return float(s.replace(",", "."))
@@ -431,11 +448,8 @@ def tabulate(
                     mean_row[seg["key"]] = {"value": _format_mean(m), "sig": ""}
                     mean_stats[seg["key"]] = (m, sd, effn)
 
-                    # Top-2
-                    if mode == "manual":
-                        top_set = set(manual_vals)
-                    else:
-                        top_set = set(codes[-n_top:]) if len(codes) else set()
+                    # Top-2 = коды 4 и 5 (по запросу)
+                    top_set = {4.0, 5.0}
                     sel = np.isin(x, list(top_set)).astype(float)
                     num = float(np.sum(w * sel))
                     p_top = (num / denom) if denom > 0 else float("nan")
@@ -456,10 +470,7 @@ def tabulate(
                     mean_row[seg["key"]] = {"value": _format_mean(m), "sig": ""}
                     mean_stats[seg["key"]] = (m, sd, effn)
 
-                    if mode == "manual":
-                        top_set = set(manual_vals)
-                    else:
-                        top_set = set(codes[-n_top:]) if len(codes) else set()
+                    top_set = {4.0, 5.0}
                     sel = np.isin(x, list(top_set)).astype(float)
                     p_top = float(np.mean(sel)) if sel.size else float("nan")
                     top2_row[seg["key"]] = {"value": _format_pct(p_top), "sig": ""}
