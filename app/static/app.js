@@ -399,43 +399,79 @@ function trimMean(v) {
 async function runTabulation(weighted) {
   const payload = collectPayload(weighted);
   if (!payload.row_vars.length) return alert("Выберите хотя бы один вопрос для строк.");
-  setStatus("Считаю таблицу...");
-  const data = await apiJson("/api/tabulate", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  state.lastResult = data.result;
-  renderResultTable(state.lastResult);
-  $("btn-export").disabled = false;
-  setStatus("");
+
+  const btnUnw = $("btn-run-unw");
+  const btnW = $("btn-run-w");
+  const btnExport = $("btn-export");
+  btnUnw.disabled = true;
+  btnW.disabled = btnW.disabled || false; // не меняем, если weight недоступен
+  btnExport.disabled = true;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000); // 2 минуты
+
+  try {
+    setStatus("Считаю таблицу...");
+    const data = await apiJson("/api/tabulate", {
+      method: "POST",
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    state.lastResult = data.result;
+    renderResultTable(state.lastResult);
+    btnExport.disabled = false;
+  } catch (e) {
+    const msg = (e && e.message) ? e.message : String(e);
+    alert(`Не удалось построить таблицу:\n${msg}`);
+  } finally {
+    clearTimeout(timeout);
+    btnUnw.disabled = false;
+    // btnW включаем только если weight есть
+    btnW.disabled = !state.hasWeight;
+    setStatus("");
+  }
 }
 
 async function exportExcel(weighted) {
   const payload = collectPayload(weighted);
   if (!payload.row_vars.length) return alert("Выберите хотя бы один вопрос для строк.");
 
-  setStatus("Готовлю Excel...");
-  const res = await fetch("/api/export", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...payload, title: "Табуляция" }),
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
+  const btnExport = $("btn-export");
+  btnExport.disabled = true;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000); // 2 минуты
+
+  try {
+    setStatus("Готовлю Excel...");
+    const res = await fetch("/api/export", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, title: "Табуляция" }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || "Ошибка экспорта");
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "tabulation.xlsx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    const msg = (e && e.message) ? e.message : String(e);
+    alert(`Не удалось скачать Excel:\n${msg}`);
+  } finally {
+    clearTimeout(timeout);
+    btnExport.disabled = false;
     setStatus("");
-    return alert(data.detail || "Ошибка экспорта");
   }
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "tabulation.xlsx";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  setStatus("");
 }
 
 function escapeHtml(s) {
