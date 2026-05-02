@@ -114,9 +114,6 @@ function renderVarsTable() {
           <option value="service">Служебная</option>
         </select>
       </td>
-      <td>
-        <button class="btn" data-scale="${escapeAttr(v.name)}">Шкала/Top‑2</button>
-      </td>
     `;
 
     const sel = tr.querySelector("select");
@@ -126,11 +123,6 @@ function renderVarsTable() {
       renderListsForTabulation();
       renderMcCols();
     });
-
-    const btn = tr.querySelector("button[data-scale]");
-    btn.disabled = (sel.value !== "scale");
-    sel.addEventListener("change", () => (btn.disabled = (sel.value !== "scale")));
-    btn.addEventListener("click", () => openScaleModal(v.name));
 
     tbody.appendChild(tr);
   }
@@ -209,74 +201,7 @@ function clearMcGroups() {
   renderListsForTabulation();
 }
 
-function openScaleModal(varName) {
-  state.scaleEditingVar = varName;
-  $("scale-modal-title").textContent = `Шкала: ${varName}`;
-  $("scale-modal").classList.remove("hidden");
-
-  const v = state.meta.variables.find((x) => x.name === varName);
-  const uniq = (v?.unique_values || []).slice(0, 50).map(String);
-
-  const smap = state.config.scale_maps[varName] || {};
-  const top = state.config.top2[varName] || { mode: "top_n", n: 2, values: [] };
-
-  const box = $("scale-map");
-  box.innerHTML = "";
-  for (const lab of uniq) {
-    const row = document.createElement("div");
-    row.className = "kv";
-    row.innerHTML = `
-      <div class="k">${escapeHtml(lab)}</div>
-      <div><input class="input" data-scale-label="${escapeAttr(lab)}" value="${escapeAttr(smap[lab] ?? "")}" placeholder="код" /></div>
-    `;
-    box.appendChild(row);
-  }
-
-  // Top-2
-  document.querySelectorAll("input[name=top2mode]").forEach((r) => (r.checked = r.value === top.mode));
-  $("top2-n").value = top.n || 2;
-  $("top2-manual").value = (top.values || []).join(",");
-}
-
-function closeScaleModal() {
-  $("scale-modal").classList.add("hidden");
-  state.scaleEditingVar = null;
-}
-
-function saveScaleModal() {
-  const varName = state.scaleEditingVar;
-  if (!varName) return;
-
-  const smap = {};
-  document.querySelectorAll("input[data-scale-label]").forEach((inp) => {
-    const lab = inp.getAttribute("data-scale-label");
-    const val = (inp.value || "").trim();
-    if (!val) return;
-    const num = Number(val.replace(",", "."));
-    if (!Number.isFinite(num)) return;
-    smap[lab] = num;
-  });
-  state.config.scale_maps[varName] = smap;
-
-  const mode = document.querySelector("input[name=top2mode]:checked")?.value || "top_n";
-  const n = Number($("top2-n").value || "2");
-  const manual = ($("top2-manual").value || "")
-    .split(",")
-    .map((x) => Number(x.trim()))
-    .filter((x) => Number.isFinite(x));
-
-  state.config.top2[varName] = {
-    mode,
-    n: Number.isFinite(n) && n > 0 ? n : 2,
-    values: manual,
-  };
-
-  closeScaleModal();
-}
-
-// Делаем функции доступными из HTML-атрибутов (на случай CSP/особенностей браузера)
-window.closeScaleModal = closeScaleModal;
-window.saveScaleModal = saveScaleModal;
+// Окно "Шкала" убрано по запросу.
 
 async function loadMetadata() {
   setStatus("Читаю метаданные...");
@@ -543,16 +468,6 @@ window.addEventListener("DOMContentLoaded", () => {
   $("btn-mc-suggest").addEventListener("click", suggestMcByPrefix);
   $("btn-mc-add").addEventListener("click", addMcGroup);
   $("btn-mc-clear").addEventListener("click", clearMcGroups);
-
-  // Scale modal
-  $("btn-scale-close").addEventListener("click", closeScaleModal);
-  $("btn-scale-save").addEventListener("click", saveScaleModal);
-  $("scale-modal").addEventListener("click", (e) => {
-    if (e.target?.id === "scale-modal") closeScaleModal();
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeScaleModal();
-  });
 
   // Filters
   $("btn-filter-add").addEventListener("click", addFilterRow);

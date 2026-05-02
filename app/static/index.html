@@ -42,8 +42,7 @@
         <div class="card">
           <h2>Настройка переменных</h2>
           <p class="muted">
-            Отметьте тип переменной. Для шкал — задайте соответствие «лейбл → код» и правило Top‑2 box.
-            Для множественного выбора — объедините несколько колонок в один вопрос (например, Q5_1..Q5_3 → Q5).
+            Отметьте тип переменной. Для множественного выбора — объедините несколько колонок в один вопрос (например, Q5_1..Q5_3 → Q5).
           </p>
 
           <div class="row">
@@ -63,7 +62,6 @@
                       <th>Вопрос</th>
                       <th>Уникальные значения</th>
                       <th>Тип</th>
-                      <th></th>
                     </tr>
                   </thead>
                   <tbody></tbody>
@@ -93,37 +91,6 @@
                 </div>
                 <div id="mc-groups" class="muted"></div>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="modal hidden" id="scale-modal">
-          <div class="modal-body">
-            <div class="row between">
-              <h3 id="scale-modal-title">Шкала</h3>
-              <button class="btn" id="btn-scale-close" type="button" onclick="closeScaleModal()">Закрыть</button>
-            </div>
-            <div class="muted small">Сопоставьте текстовые лейблы с числовыми кодами (например 1..5).</div>
-            <div id="scale-map"></div>
-
-            <hr />
-            <h4>Top‑2 box</h4>
-            <div class="row">
-              <label class="radio">
-                <input type="radio" name="top2mode" value="top_n" checked />
-                Верхние N значений
-              </label>
-              <input class="input small" id="top2-n" type="number" min="1" value="2" />
-            </div>
-            <div class="row">
-              <label class="radio">
-                <input type="radio" name="top2mode" value="manual" />
-                Вручную (коды через запятую)
-              </label>
-              <input class="input" id="top2-manual" placeholder="например 4,5" />
-            </div>
-            <div class="row">
-              <button class="btn primary" id="btn-scale-save" type="button" onclick="saveScaleModal()">Сохранить шкалу</button>
             </div>
           </div>
         </div>
