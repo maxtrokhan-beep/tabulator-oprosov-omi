@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.models import ConfigPayload, ExportPayload, TabulatePayload
 from app.core.excel_export import build_excel_bytes
@@ -19,6 +20,23 @@ app = FastAPI(title="MVP Табулятор опросов", version="0.1.0")
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    return JSONResponse(status_code=400, content={"ok": False, "detail": str(exc)})
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_error_handler(request: Request, exc: StarletteHTTPException):
+    # Гарантируем единый JSON-формат ошибок для фронтенда
+    detail = exc.detail if isinstance(exc.detail, str) else "Ошибка запроса"
+    return JSONResponse(status_code=exc.status_code, content={"ok": False, "detail": detail})
+
+
+@app.exception_handler(Exception)
+async def any_error_handler(request: Request, exc: Exception):
+    # Не светим traceback пользователю, но даем понятную ошибку
+    return JSONResponse(status_code=500, content={"ok": False, "detail": f'Внутренняя ошибка сервера: {type(exc).__name__}'})
 
 
 @app.middleware("http")
