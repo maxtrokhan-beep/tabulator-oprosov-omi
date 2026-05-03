@@ -21,6 +21,27 @@ app = FastAPI(title="MVP Табулятор опросов", version="0.1.0")
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
+
+def _json_sanitize(obj: Any) -> Any:
+    """
+    JSON не допускает NaN/Inf. В расчётах numpy/pandas часто появляется float('nan'),
+    поэтому перед JSONResponse приводим такие значения к null (None).
+    """
+    if obj is None:
+        return None
+    if isinstance(obj, float):
+        if obj != obj:  # NaN
+            return None
+        if obj == float("inf") or obj == float("-inf"):
+            return None
+        return obj
+    if isinstance(obj, dict):
+        return {str(k): _json_sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_sanitize(v) for v in obj]
+    return obj
+
+
 @app.exception_handler(ValueError)
 async def value_error_handler(request: Request, exc: ValueError):
     return JSONResponse(status_code=400, content={"ok": False, "detail": str(exc)})
@@ -129,7 +150,7 @@ def api_tabulate(request: Request, payload: TabulatePayload):
         weighted=payload.weighted,
         show_sig=payload.show_sig,
     )
-    return JSONResponse({"ok": True, "result": result})
+    return JSONResponse({"ok": True, "result": _json_sanitize(result)})
 
 
 @app.post("/api/export")
