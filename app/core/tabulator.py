@@ -21,8 +21,8 @@ def build_metadata(df: pd.DataFrame, questions: dict[str, str]) -> dict[str, Any
         ser = df[col]
         uniq = ser.dropna().unique().tolist()
         uniq = [x for x in uniq if str(x).strip().lower() != "nan"]
-        # ограничиваем, чтобы UI не "взрывался"
-        uniq_preview = uniq[:50]
+        # ограничиваем, чтобы UI не "взрывался" (полный список для шкал — /api/scale-values)
+        uniq_preview = uniq[:200]
         variables.append(
             {
                 "name": col,
@@ -32,6 +32,39 @@ def build_metadata(df: pd.DataFrame, questions: dict[str, str]) -> dict[str, Any
             }
         )
     return {"variables": variables, "has_weight": has_weight}
+
+
+def scale_unique_entries(df: pd.DataFrame, var: str, max_n: int = 400) -> list[dict[str, Any]]:
+    """
+    Уникальные ответы для настройки шкалы: текстовым значениям нужен код в scale_maps;
+    числовые значения в данных используются как код сами по себе.
+    """
+    if var not in df.columns:
+        return []
+    ser = df[var].apply(_normalize_value)
+    vals = [x for x in ser.dropna().unique().tolist()]
+
+    def sort_key(x: Any):
+        if isinstance(x, (int, float, np.integer, np.floating)):
+            return (0, float(x))
+        return (1, str(x))
+
+    vals = sorted(vals, key=sort_key)[:max_n]
+    out: list[dict[str, Any]] = []
+    for v in vals:
+        is_num = isinstance(v, (int, float, np.integer, np.floating))
+        if is_num:
+            fv = float(v)
+            out.append(
+                {
+                    "display": str(int(fv)) if fv.is_integer() else str(fv),
+                    "map_key": None,
+                    "needs_map": False,
+                }
+            )
+        else:
+            out.append({"display": str(v), "map_key": str(v), "needs_map": True})
+    return out
 
 
 def _normalize_value(v: Any) -> Any:
@@ -197,7 +230,6 @@ def tabulate(
 
     var_types: dict[str, str] = config.get("var_types", {}) or {}
     scale_maps: dict[str, dict[str, float]] = config.get("scale_maps", {}) or {}
-    top2: dict[str, Any] = config.get("top2", {}) or {}
     multi_groups: list[dict[str, Any]] = config.get("multi_groups", []) or []
 
     weight_var = None
@@ -376,27 +408,30 @@ def tabulate(
             add_row({"kind": "base", "label": "База ответивших", "base": base_by_seg})
 
         elif vtype == "scale":
-            # MVP-упрощение по запросу:
-            # - модального окна "Шкала" нет
-            # - Top-2 box всегда считаем как коды 4 и 5
-            #
-            # Дополнительно: если в данных шкала хранится текстовыми лейблами,
-            # автоматически кодируем их в 1..K по сортированному списку уникальных лейблов.
-            #
-            # Важно: если в шкале меньше 5 пунктов, Top-2 по (4,5) может быть пустым — это ожидаемо.
+            # Top-2 box: коды 4 и 5 (как зафиксировано в MVP).
+            # Текстовые ответы переводятся в коды только через scale_maps из UI (без авто-угадывания).
+            # Числа в ячейках используются как коды напрямую; строка "4" может стать кодом через парсинг,
+            # если пользователь не задал явное сопоставление.
 
-            # Маппинг лейбл->код из UI игнорируем (окно убрали), но оставляем обратную совместимость:
             smap = scale_maps.get(rv, {}) or {}
 
-            # Подготовим авто-маппинг для строковых значений
-            ser_norm = df0[rv].apply(_normalize_value)
-            labels = [x for x in ser_norm.dropna().unique().tolist() if not isinstance(x, (int, float, np.integer, np.floating))]
+            def _labels_for_code(code: float) -> list[str]:
+                c = float(code)
+                labs: list[str] = []
+                for lab, sc in smap.items():
+                    try:
+                        if abs(float(sc) - c) < 1e-9:
+                            labs.append(str(lab))
+                    except (TypeError, ValueError):
+                        continue
+                return sorted(set(labs))
 
-            def _label_key(x: Any):
-                return str(x)
-
-            labels_sorted = sorted([str(x) for x in labels], key=_label_key)
-            auto_map = {lab: float(i + 1) for i, lab in enumerate(labels_sorted)}
+            def _scale_row_label(code: float) -> str:
+                labels = _labels_for_code(code)
+                cstr = str(int(code)) if float(code).is_integer() else str(code)
+                if labels:
+                    return f"— {', '.join(labels)} ({cstr})"
+                return f"— {cstr}"
 
             def to_code(v: Any) -> Optional[float]:
                 v = _normalize_value(v)
@@ -407,15 +442,12 @@ def tabulate(
                 s = str(v).strip()
                 if s in smap:
                     return float(smap[s])
-                if s in auto_map:
-                    return float(auto_map[s])
-                # если маппинг не задан, пробуем парсить число
+                # строка с числом без явного сопоставления
                 try:
                     return float(s.replace(",", "."))
                 except Exception:
                     return None
 
-            # уровни распределения берем по коду, но подпись — исходный лейбл, если есть
             codes_series = df0[rv].apply(to_code)
             codes = codes_series.dropna().unique().tolist()
             codes = sorted([float(x) for x in codes])
@@ -541,12 +573,12 @@ def tabulate(
                             sig_letters.append(seg_letters.get(kj, "?"))
                     mean_row[ki]["sig"] = "".join(sorted(set(sig_letters)))
 
-            # вывод
+            # вывод: подпись строки — текст(ы) ответа из scale_maps + код в скобках
             for c in codes:
                 add_row(
                     {
                         "kind": "pct",
-                        "label": f"— {int(c) if float(c).is_integer() else c}",
+                        "label": _scale_row_label(c),
                         "cells": {k: dist[c][k] for k in dist[c].keys()},
                     }
                 )
