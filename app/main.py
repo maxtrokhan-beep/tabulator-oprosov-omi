@@ -14,7 +14,7 @@ from app.models import ConfigPayload, ExportPayload, TabulatePayload
 from app.core.excel_export import build_excel_bytes
 from app.core.io import load_survey_file
 from app.core.session_store import SESSION_COOKIE, store
-from app.core.tabulator import build_metadata, tabulate
+from app.core.tabulator import build_metadata, scale_unique_entries, tabulate
 
 app = FastAPI(title="MVP Табулятор опросов", version="0.1.0")
 
@@ -119,6 +119,19 @@ def metadata(request: Request):
     if not s:
         raise HTTPException(status_code=400, detail="Сначала загрузите файл.")
     return JSONResponse({"ok": True, "meta": s["meta"], "config": s.get("config")})
+
+
+@app.get("/api/scale-values")
+def api_scale_values(request: Request, var: str):
+    """Уникальные значения переменной для ручного сопоставления «текст → код»."""
+    sid = _sid(request)
+    s = store.get(sid)
+    if not s:
+        raise HTTPException(status_code=400, detail="Сначала загрузите файл.")
+    if not var or var not in s["df"].columns:
+        raise HTTPException(status_code=400, detail="Переменная не найдена.")
+    entries = scale_unique_entries(s["df"], var)
+    return JSONResponse({"ok": True, "entries": entries})
 
 
 @app.post("/api/config")
