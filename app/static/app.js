@@ -8,7 +8,6 @@ const state = {
   },
   lastResult: null,
   hasWeight: false,
-  scaleEditingVar: null,
 };
 
 function $(id) {
@@ -129,9 +128,91 @@ function renderVarsTable() {
       state.config.var_types[v.name] = e.target.value;
       renderListsForTabulation();
       renderMcCols();
+      renderScaleMappings();
     });
 
     tbody.appendChild(tr);
+  }
+  void renderScaleMappings();
+}
+
+async function renderScaleMappings() {
+  const box = $("scale-mappings");
+  if (!box) return;
+  box.innerHTML = "";
+
+  const vars = state.meta?.variables || [];
+  const scaleVars = vars.filter((v) => (state.config.var_types[v.name] || defaultVarType(v.name)) === "scale");
+  if (!scaleVars.length) {
+    box.innerHTML =
+      '<p class="muted small">Нет шкальных переменных. Выберите тип «Шкальная» в таблице выше.</p>';
+    return;
+  }
+
+  for (const v of scaleVars) {
+    const wrap = document.createElement("div");
+    wrap.className = "card inner";
+    wrap.style.marginTop = "10px";
+
+    const h = document.createElement("h4");
+    h.textContent = `${v.name} — ${(v.question || "").slice(0, 140)}`;
+    wrap.appendChild(h);
+
+    const status = document.createElement("p");
+    status.className = "muted small";
+    status.textContent = "Загрузка вариантов ответа…";
+    wrap.appendChild(status);
+
+    const tbl = document.createElement("table");
+    tbl.className = "table";
+    tbl.innerHTML =
+      "<thead><tr><th>Ответ (как в базе)</th><th>Код</th></tr></thead><tbody></tbody>";
+    wrap.appendChild(tbl);
+    box.appendChild(wrap);
+
+    try {
+      const data = await apiJson(`/api/scale-values?var=${encodeURIComponent(v.name)}`);
+      status.textContent = "";
+      const tbody = tbl.querySelector("tbody");
+      tbody.innerHTML = "";
+      const entries = data.entries || [];
+      if (!entries.length) {
+        status.textContent = "Нет уникальных значений.";
+        continue;
+      }
+      if (!state.config.scale_maps[v.name]) state.config.scale_maps[v.name] = {};
+      const sm = state.config.scale_maps[v.name];
+
+      for (const e of entries) {
+        const tr = document.createElement("tr");
+        if (!e.needs_map) {
+          tr.innerHTML = `<td><small>${escapeHtml(e.display)}</small></td><td class="muted">число в данных</td>`;
+        } else {
+          const mk = e.map_key;
+          const cur = sm[mk] != null && sm[mk] !== "" ? sm[mk] : "";
+          tr.innerHTML = `<td>${escapeHtml(e.display)}</td><td><input type="number" step="any" class="input" style="max-width: 140px" data-scale-var="${escapeAttr(
+            v.name
+          )}" data-scale-key="${escapeAttr(mk)}" value="${escapeAttr(String(cur))}" /></td>`;
+          const inp = tr.querySelector("input");
+          inp.addEventListener("change", () => {
+            const raw = String(inp.value || "").trim().replace(",", ".");
+            if (raw === "") {
+              delete sm[mk];
+              return;
+            }
+            const num = Number(raw);
+            if (!Number.isFinite(num)) {
+              delete sm[mk];
+            } else {
+              sm[mk] = num;
+            }
+          });
+        }
+        tbody.appendChild(tr);
+      }
+    } catch (err) {
+      status.textContent = err.message || String(err);
+    }
   }
 }
 
@@ -207,8 +288,6 @@ function clearMcGroups() {
   renderVarsTable();
   renderListsForTabulation();
 }
-
-// Окно "Шкала" убрано по запросу.
 
 async function loadMetadata() {
   setStatus("Читаю метаданные...");
