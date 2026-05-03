@@ -44,9 +44,16 @@ async function apiJson(url, opts = {}) {
       ...(opts.headers || {}),
     },
   });
-  const data = await res.json().catch(() => ({}));
+  const text = await res.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = {};
+  }
   if (!res.ok || data.ok === false) {
-    throw new Error(data.detail || data.error || "Ошибка запроса");
+    const detail = data.detail || data.error || (text && text.slice(0, 500)) || "Ошибка запроса";
+    throw new Error(`${detail} (HTTP ${res.status})`);
   }
   return data;
 }
