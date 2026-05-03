@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import itertools
 import math
-from dataclasses import dataclass
-from typing import Any, Iterable, Literal, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -80,9 +78,10 @@ def _kish_effective_n(w: np.ndarray) -> float:
     return (sw * sw) / sw2
 
 
-def _segment_mask(df: pd.DataFrame, banner_vars: list[str], banner_values: tuple[Any, ...]) -> pd.Series:
+def _slice_mask(df: pd.DataFrame, slice_pairs: list[tuple[str, Any]]) -> pd.Series:
+    """Срез по одной или нескольким парам (переменная, значение). Пустой список = вся база."""
     mask = pd.Series(True, index=df.index)
-    for var, val in zip(banner_vars, banner_values):
+    for var, val in slice_pairs:
         mask &= df[var].apply(_normalize_value) == _normalize_value(val)
     return mask
 
@@ -112,19 +111,24 @@ def _banner_categories(df: pd.DataFrame, var: str) -> list[Any]:
 
 
 def _make_segments(df: pd.DataFrame, banner_vars: list[str]) -> list[dict[str, Any]]:
-    segments: list[dict[str, Any]] = []
+    """
+    Колонки баннеров — не вложенные (без декартова произведения):
+    сначала «Итого», затем по порядку переменных все категории каждой переменной.
+    Каждая такая колонка — срез только по одной баннер‑переменной (и глобальным фильтрам).
+    """
+    segments: list[dict[str, Any]] = [{"key": "Итого", "label": "Итого", "slice": []}]
     if not banner_vars:
-        segments.append({"key": "Итого", "label": "Итого", "values": tuple()})
         return segments
 
-    cats = [_banner_categories(df, v) for v in banner_vars]
-    for vals in itertools.product(*cats):
-        parts = [f"{v}={vals[i]}" for i, v in enumerate(banner_vars)]
-        label = " / ".join(parts)
-        key = "|".join(str(x) for x in vals)
-        segments.append({"key": key, "label": label, "values": vals})
-
-    segments.insert(0, {"key": "Итого", "label": "Итого", "values": tuple()})
+    col_idx = 0
+    for bvar in banner_vars:
+        if bvar not in df.columns:
+            continue
+        for cat in _banner_categories(df, bvar):
+            key = f"col{col_idx}"
+            col_idx += 1
+            label = f"{bvar}={cat}"
+            segments.append({"key": key, "label": label, "slice": [(bvar, cat)]})
     return segments
 
 
@@ -213,12 +217,12 @@ def tabulate(
         seg_letters[seg["key"]] = _col_letter(letter_idx)
         letter_idx += 1
 
-    # helper: получаем подвыборку сегмента
-    def get_seg_df(seg_values: tuple[Any, ...]) -> pd.DataFrame:
-        if not banner_vars or len(seg_values) == 0:
+    # helper: подвыборка по slice сегмента
+    def get_seg_df(seg: dict[str, Any]) -> pd.DataFrame:
+        slice_pairs: list[tuple[str, Any]] = seg.get("slice") or []
+        if not slice_pairs:
             return df0
-        m = _segment_mask(df0, banner_vars, seg_values)
-        return df0[m]
+        return df0[_slice_mask(df0, slice_pairs)]
 
     # готовим "вопросы-строки": обычные переменные + группы множественного выбора как псевдо-переменные
     mc_by_name: dict[str, dict[str, Any]] = {g["name"]: g for g in multi_groups if g.get("name")}
@@ -243,7 +247,7 @@ def tabulate(
             val_by_opt: dict[str, dict[str, Any]] = {opt: {} for opt in options}
 
             for seg in segments:
-                sdf = get_seg_df(seg["values"])
+                sdf = get_seg_df(seg)
                 if weighted:
                     w = sdf[weight_var].fillna(0).to_numpy(dtype=float)
                     base = float(np.sum(w))
@@ -308,7 +312,7 @@ def tabulate(
             effn_by_seg: dict[str, float] = {}
 
             for seg in segments:
-                sdf = get_seg_df(seg["values"])
+                sdf = get_seg_df(seg)
                 ser = sdf[rv].apply(_normalize_value)
                 answered = ser.notna()
                 sdf_a = sdf[answered]
@@ -425,7 +429,7 @@ def tabulate(
             mean_stats: dict[str, tuple[float, float, float]] = {}  # key -> (mean, std, n_eff)
 
             for seg in segments:
-                sdf = get_seg_df(seg["values"])
+                sdf = get_seg_df(seg)
                 sc = sdf[rv].apply(to_code)
                 answered = sc.notna()
                 sdf_a = sdf[answered]
