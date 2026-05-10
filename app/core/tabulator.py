@@ -415,10 +415,44 @@ def tabulate(
 
             smap = scale_maps.get(rv, {}) or {}
 
+            # Fallback: если ручная карта отсутствует/неполная, не даем шкале "обнулиться".
+            # Для текстовых ответов без явного кода назначаем авто-коды по порядку появления в данных.
+            ser_norm = df0[rv].apply(_normalize_value)
+            text_vals: list[str] = []
+            for x in ser_norm.dropna().tolist():
+                if isinstance(x, (int, float, np.integer, np.floating)):
+                    continue
+                sx = str(x).strip()
+                if sx and sx not in text_vals:
+                    text_vals.append(sx)
+
+            mapped_codes: list[float] = []
+            for _, sc in smap.items():
+                try:
+                    mapped_codes.append(float(sc))
+                except (TypeError, ValueError):
+                    continue
+            next_code = int(max(mapped_codes)) + 1 if mapped_codes else 1
+
+            auto_map: dict[str, float] = {}
+            for lab in text_vals:
+                if lab in smap:
+                    continue
+                auto_map[lab] = float(next_code)
+                next_code += 1
+
+            effective_map: dict[str, float] = {}
+            for lab, sc in smap.items():
+                try:
+                    effective_map[str(lab)] = float(sc)
+                except (TypeError, ValueError):
+                    continue
+            effective_map.update(auto_map)
+
             def _labels_for_code(code: float) -> list[str]:
                 c = float(code)
                 labs: list[str] = []
-                for lab, sc in smap.items():
+                for lab, sc in effective_map.items():
                     try:
                         if abs(float(sc) - c) < 1e-9:
                             labs.append(str(lab))
@@ -440,8 +474,8 @@ def tabulate(
                 if isinstance(v, (int, float, np.integer, np.floating)):
                     return float(v)
                 s = str(v).strip()
-                if s in smap:
-                    return float(smap[s])
+                if s in effective_map:
+                    return float(effective_map[s])
                 # строка с числом без явного сопоставления
                 try:
                     return float(s.replace(",", "."))
