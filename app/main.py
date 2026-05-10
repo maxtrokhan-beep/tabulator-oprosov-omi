@@ -10,11 +10,11 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.models import ConfigPayload, ExportPayload, TabulatePayload
+from app.models import ConfigPayload, ExportPayload, ScaleEffectivePayload, TabulatePayload
 from app.core.excel_export import build_excel_bytes
 from app.core.io import load_survey_file
 from app.core.session_store import SESSION_COOKIE, store
-from app.core.tabulator import build_metadata, scale_unique_entries, tabulate
+from app.core.tabulator import build_effective_scale_map, build_metadata, scale_unique_entries, tabulate
 
 app = FastAPI(title="MVP Табулятор опросов", version="0.1.0")
 
@@ -132,6 +132,19 @@ def api_scale_values(request: Request, var: str):
         raise HTTPException(status_code=400, detail="Переменная не найдена.")
     entries = scale_unique_entries(s["df"], var)
     return JSONResponse({"ok": True, "entries": entries})
+
+
+@app.post("/api/scale-effective-map")
+def api_scale_effective_map(request: Request, payload: ScaleEffectivePayload):
+    """Полная карта текст→код (ручная + автодополнение), как при табуляции."""
+    sid = _sid(request)
+    st = store.get(sid)
+    if not st:
+        raise HTTPException(status_code=400, detail="Сначала загрузите файл.")
+    if not payload.var or payload.var not in st["df"].columns:
+        raise HTTPException(status_code=400, detail="Переменная не найдена.")
+    eff = build_effective_scale_map(st["df"][payload.var], payload.manual)
+    return JSONResponse({"ok": True, "effective": eff})
 
 
 @app.post("/api/config")

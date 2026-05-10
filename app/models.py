@@ -42,3 +42,10 @@ class TabulatePayload(BaseModel):
 
 class ExportPayload(TabulatePayload):
     title: Optional[str] = None
+
+
+class ScaleEffectivePayload(BaseModel):
+    """Текущие ручные коды шкалы с клиента — вернуть полную карту с автодополнением."""
+
+    var: str
+    manual: dict[str, float] = Field(default_factory=dict)
