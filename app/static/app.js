@@ -136,6 +136,37 @@ function renderVarsTable() {
   void renderScaleMappings();
 }
 
+function _hasUserScaleCode(sm, mapKey) {
+  const x = sm[mapKey];
+  return x !== undefined && x !== null && x !== "" && Number.isFinite(Number(x));
+}
+
+function invertScaleCodes(varName) {
+  const sm = state.config.scale_maps[varName];
+  if (!sm || !Object.keys(sm).length) {
+    alert("Нет кодов для инверсии. Дождитесь загрузки шкалы или введите коды вручную.");
+    return;
+  }
+  const nums = Object.values(sm)
+    .map((x) => Number(x))
+    .filter((x) => Number.isFinite(x));
+  if (!nums.length) {
+    alert("Нет числовых кодов.");
+    return;
+  }
+  const minC = Math.min(...nums);
+  const maxC = Math.max(...nums);
+  if (minC === maxC) {
+    alert("Нужны как минимум два разных кода для инверсии (например 1 и 5).");
+    return;
+  }
+  for (const k of Object.keys(sm)) {
+    const c = Number(sm[k]);
+    if (Number.isFinite(c)) sm[k] = minC + maxC - c;
+  }
+  void renderScaleMappings();
+}
+
 async function renderScaleMappings() {
   const box = $("scale-mappings");
   if (!box) return;
@@ -158,6 +189,18 @@ async function renderScaleMappings() {
     h.textContent = `${v.name} — ${(v.question || "").slice(0, 140)}`;
     wrap.appendChild(h);
 
+    const toolbar = document.createElement("div");
+    toolbar.className = "row";
+    const btnInv = document.createElement("button");
+    btnInv.type = "button";
+    btnInv.className = "btn";
+    btnInv.textContent = "Инвертировать коды (min ↔ max)";
+    btnInv.title =
+      "Для всех заданных кодов: новый код = min + max − старый (для шкалы 1…5 это 1↔5, 2↔4).";
+    btnInv.addEventListener("click", () => invertScaleCodes(v.name));
+    toolbar.appendChild(btnInv);
+    wrap.appendChild(toolbar);
+
     const status = document.createElement("p");
     status.className = "muted small";
     status.textContent = "Загрузка вариантов ответа…";
@@ -172,16 +215,38 @@ async function renderScaleMappings() {
 
     try {
       const data = await apiJson(`/api/scale-values?var=${encodeURIComponent(v.name)}`);
-      status.textContent = "";
-      const tbody = tbl.querySelector("tbody");
-      tbody.innerHTML = "";
+      if (!state.config.scale_maps[v.name]) state.config.scale_maps[v.name] = {};
+      const sm = state.config.scale_maps[v.name];
+
       const entries = data.entries || [];
       if (!entries.length) {
         status.textContent = "Нет уникальных значений.";
         continue;
       }
-      if (!state.config.scale_maps[v.name]) state.config.scale_maps[v.name] = {};
-      const sm = state.config.scale_maps[v.name];
+
+      const manual = {};
+      for (const k of Object.keys(sm)) {
+        const n = Number(sm[k]);
+        if (Number.isFinite(n)) manual[k] = n;
+      }
+
+      const effRes = await apiJson("/api/scale-effective-map", {
+        method: "POST",
+        body: JSON.stringify({ var: v.name, manual }),
+      });
+      const eff = effRes.effective || {};
+
+      for (const e of entries) {
+        if (!e.needs_map || !e.map_key) continue;
+        const mk = e.map_key;
+        if (!_hasUserScaleCode(sm, mk) && eff[mk] !== undefined && eff[mk] !== null) {
+          sm[mk] = eff[mk];
+        }
+      }
+
+      status.textContent = "";
+      const tbody = tbl.querySelector("tbody");
+      tbody.innerHTML = "";
 
       for (const e of entries) {
         const tr = document.createElement("tr");
@@ -189,7 +254,7 @@ async function renderScaleMappings() {
           tr.innerHTML = `<td><small>${escapeHtml(e.display)}</small></td><td class="muted">число в данных</td>`;
         } else {
           const mk = e.map_key;
-          const cur = sm[mk] != null && sm[mk] !== "" ? sm[mk] : "";
+          const cur = _hasUserScaleCode(sm, mk) ? sm[mk] : "";
           tr.innerHTML = `<td>${escapeHtml(e.display)}</td><td><input type="number" step="any" class="input" style="max-width: 140px" data-scale-var="${escapeAttr(
             v.name
           )}" data-scale-key="${escapeAttr(mk)}" value="${escapeAttr(String(cur))}" /></td>`;
