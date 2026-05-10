@@ -80,6 +80,47 @@ def _normalize_value(v: Any) -> Any:
     return v
 
 
+def build_effective_scale_map(ser: pd.Series, manual: Optional[dict[str, Any]] = None) -> dict[str, float]:
+    """
+    Карта «текст ответа → код»: ручные значения из manual + автодополнение для текстов
+    без кода (порядок кодов — по первому появлению значения в данных).
+    Должна совпадать с логикой табуляции шкалы.
+    """
+    manual = manual or {}
+    ser_norm = ser.apply(_normalize_value)
+    text_vals: list[str] = []
+    for x in ser_norm.dropna().tolist():
+        if isinstance(x, (int, float, np.integer, np.floating)):
+            continue
+        sx = str(x).strip()
+        if sx and sx not in text_vals:
+            text_vals.append(sx)
+
+    mapped_codes: list[float] = []
+    for _, sc in manual.items():
+        try:
+            mapped_codes.append(float(sc))
+        except (TypeError, ValueError):
+            continue
+    next_code = int(max(mapped_codes)) + 1 if mapped_codes else 1
+
+    auto_map: dict[str, float] = {}
+    for lab in text_vals:
+        if lab in manual:
+            continue
+        auto_map[lab] = float(next_code)
+        next_code += 1
+
+    effective_map: dict[str, float] = {}
+    for lab, sc in manual.items():
+        try:
+            effective_map[str(lab)] = float(sc)
+        except (TypeError, ValueError):
+            continue
+    effective_map.update(auto_map)
+    return effective_map
+
+
 def _is_selected_mc(v: Any) -> bool:
     """
     Для множественного выбора (несколько колонок-вариантов).
@@ -408,46 +449,10 @@ def tabulate(
             add_row({"kind": "base", "label": "База ответивших", "base": base_by_seg})
 
         elif vtype == "scale":
-            # Top-2 box: коды 4 и 5 (как зафиксировано в MVP).
-            # Текстовые ответы переводятся в коды только через scale_maps из UI (без авто-угадывания).
-            # Числа в ячейках используются как коды напрямую; строка "4" может стать кодом через парсинг,
-            # если пользователь не задал явное сопоставление.
+            # Top-2 box: коды 4 и 5. Текстовые ответы: scale_maps + автодополнение (build_effective_scale_map).
 
             smap = scale_maps.get(rv, {}) or {}
-
-            # Fallback: если ручная карта отсутствует/неполная, не даем шкале "обнулиться".
-            # Для текстовых ответов без явного кода назначаем авто-коды по порядку появления в данных.
-            ser_norm = df0[rv].apply(_normalize_value)
-            text_vals: list[str] = []
-            for x in ser_norm.dropna().tolist():
-                if isinstance(x, (int, float, np.integer, np.floating)):
-                    continue
-                sx = str(x).strip()
-                if sx and sx not in text_vals:
-                    text_vals.append(sx)
-
-            mapped_codes: list[float] = []
-            for _, sc in smap.items():
-                try:
-                    mapped_codes.append(float(sc))
-                except (TypeError, ValueError):
-                    continue
-            next_code = int(max(mapped_codes)) + 1 if mapped_codes else 1
-
-            auto_map: dict[str, float] = {}
-            for lab in text_vals:
-                if lab in smap:
-                    continue
-                auto_map[lab] = float(next_code)
-                next_code += 1
-
-            effective_map: dict[str, float] = {}
-            for lab, sc in smap.items():
-                try:
-                    effective_map[str(lab)] = float(sc)
-                except (TypeError, ValueError):
-                    continue
-            effective_map.update(auto_map)
+            effective_map = build_effective_scale_map(df0[rv], smap)
 
             def _labels_for_code(code: float) -> list[str]:
                 c = float(code)
