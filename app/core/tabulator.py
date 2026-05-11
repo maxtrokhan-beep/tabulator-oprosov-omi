@@ -313,8 +313,12 @@ def tabulate(
             if not cols:
                 continue
 
-            # варианты = названия колонок (для MVP)
+            # варианты = колонки; подпись строки — текст вопроса из 2-й строки файла (questions), иначе имя колонки
             options = cols
+
+            def _mc_option_label(col: str) -> str:
+                txt = (questions.get(col) or "").strip()
+                return txt if txt else col
             # base по сегменту: все респонденты в сегменте (после фильтров)
             base_by_seg: dict[str, float] = {}
             val_by_opt: dict[str, dict[str, Any]] = {opt: {} for opt in options}
@@ -346,7 +350,7 @@ def tabulate(
                 add_row(
                     {
                         "kind": "pct",
-                        "label": f"— {opt}",
+                        "label": f"— {_mc_option_label(opt)}",
                         "cells": {k: val_by_opt[opt][k] for k in val_by_opt[opt].keys()},
                     }
                 )
