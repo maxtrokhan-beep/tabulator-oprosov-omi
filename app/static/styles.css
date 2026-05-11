@@ -98,7 +98,8 @@ h2, h3, h4 { margin: 8px 0 10px; }
 .list { border: 1px solid var(--line); border-radius: 12px; padding: 10px; min-height: 120px; max-height: 280px; overflow: auto; }
 .list .item { display: flex; gap: 8px; align-items: flex-start; padding: 6px 4px; border-bottom: 1px solid rgba(255,255,255,0.06); }
 .list .item:last-child { border-bottom: none; }
-.list label { cursor: pointer; }
+.list label { cursor: pointer; display: flex; align-items: flex-start; gap: 8px; width: 100%; white-space: normal; }
+.list .var-label-text { white-space: normal; word-break: break-word; overflow-wrap: anywhere; line-height: 1.35; }
 
 .mc-cols { border: 1px solid var(--line); border-radius: 12px; padding: 10px; max-height: 240px; overflow: auto; }
 .mc-cols .item { padding: 6px 4px; border-bottom: 1px solid rgba(255,255,255,0.06); }
