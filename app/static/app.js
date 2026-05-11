@@ -415,10 +415,14 @@ function renderListsForTabulation() {
   }
 
   const bannerItems = [];
+  // Для колонок разрешаем и исходные сервисные колонки (кроме weight),
+  // и сгруппированные вопросы множественного выбора.
   for (const v of vars) {
-    const t = state.config.var_types[v.name] || defaultVarType(v.name);
-    if (t === "service") continue;
+    if (String(v.name).toLowerCase() === "weight") continue;
     bannerItems.push({ id: v.name, label: `${v.name} — ${(v.question || "").slice(0, 70)}` });
+  }
+  for (const g of state.config.multi_groups || []) {
+    bannerItems.push({ id: g.name, label: `${g.name} — ${g.question || "множественный выбор"}` });
   }
 
   for (const it of rowItems) {
