@@ -428,13 +428,13 @@ function renderListsForTabulation() {
   for (const it of rowItems) {
     const div = document.createElement("div");
     div.className = "item";
-    div.innerHTML = `<label><input type="checkbox" data-row="${escapeAttr(it.id)}" /> ${escapeHtml(it.label)}</label>`;
+    div.innerHTML = `<label title="${escapeAttr(it.label)}"><input type="checkbox" data-row="${escapeAttr(it.id)}" /> <span class="var-label-text">${escapeHtml(it.label)}</span></label>`;
     rowsBox.appendChild(div);
   }
   for (const it of bannerItems) {
     const div = document.createElement("div");
     div.className = "item";
-    div.innerHTML = `<label><input type="checkbox" data-banner="${escapeAttr(it.id)}" /> ${escapeHtml(it.label)}</label>`;
+    div.innerHTML = `<label title="${escapeAttr(it.label)}"><input type="checkbox" data-banner="${escapeAttr(it.id)}" /> <span class="var-label-text">${escapeHtml(it.label)}</span></label>`;
     bannersBox.appendChild(div);
   }
 }
