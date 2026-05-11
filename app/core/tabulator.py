@@ -184,11 +184,17 @@ def _banner_categories(df: pd.DataFrame, var: str) -> list[Any]:
     return sorted(cats, key=key)
 
 
-def _make_segments(df: pd.DataFrame, banner_vars: list[str]) -> list[dict[str, Any]]:
+def _make_segments(
+    df: pd.DataFrame,
+    banner_vars: list[str],
+    mc_by_name: dict[str, dict[str, Any]],
+    questions: dict[str, str],
+) -> list[dict[str, Any]]:
     """
     Колонки баннеров — не вложенные (без декартова произведения):
     сначала «Итого», затем по порядку переменных все категории каждой переменной.
-    Каждая такая колонка — срез только по одной баннер‑переменной (и глобальным фильтрам).
+    Для группы множественного выбора (banner_var == имя группы) создаем отдельные
+    колонки по вариантам группы: срез = выбран соответствующий столбец-вариант.
     """
     segments: list[dict[str, Any]] = [{"key": "Итого", "label": "Итого", "slice": []}]
     if not banner_vars:
@@ -196,6 +202,17 @@ def _make_segments(df: pd.DataFrame, banner_vars: list[str]) -> list[dict[str, A
 
     col_idx = 0
     for bvar in banner_vars:
+        if bvar in mc_by_name:
+            g = mc_by_name[bvar]
+            cols = [c for c in (g.get("columns") or []) if c in df.columns]
+            for col in cols:
+                key = f"col{col_idx}"
+                col_idx += 1
+                txt = (questions.get(col) or "").strip()
+                opt_label = txt if txt else col
+                segments.append({"key": key, "label": f"{bvar}={opt_label}", "mc_col": col})
+            continue
+
         if bvar not in df.columns:
             continue
         for cat in _banner_categories(df, bvar):
@@ -280,7 +297,10 @@ def tabulate(
     if weighted and not weight_var:
         raise ValueError("Взвешивание недоступно: переменная weight не найдена.")
 
-    segments = _make_segments(df0, banner_vars)
+    # готовим группы множественного выбора заранее: нужны и для строк, и для баннеров
+    mc_by_name: dict[str, dict[str, Any]] = {g["name"]: g for g in multi_groups if g.get("name")}
+
+    segments = _make_segments(df0, banner_vars, mc_by_name, questions)
     # буквы только для "реальных" баннер-колонок (без Итого)
     seg_letters: dict[str, str] = {}
     letter_idx = 0
@@ -290,15 +310,16 @@ def tabulate(
         seg_letters[seg["key"]] = _col_letter(letter_idx)
         letter_idx += 1
 
-    # helper: подвыборка по slice сегмента
+    # helper: подвыборка по сегменту (обычный срез или вариант MC-баннера)
     def get_seg_df(seg: dict[str, Any]) -> pd.DataFrame:
+        mc_col = seg.get("mc_col")
+        if mc_col:
+            return df0[df0[mc_col].apply(_is_selected_mc)]
+
         slice_pairs: list[tuple[str, Any]] = seg.get("slice") or []
         if not slice_pairs:
             return df0
         return df0[_slice_mask(df0, slice_pairs)]
-
-    # готовим "вопросы-строки": обычные переменные + группы множественного выбора как псевдо-переменные
-    mc_by_name: dict[str, dict[str, Any]] = {g["name"]: g for g in multi_groups if g.get("name")}
 
     output_rows: list[dict[str, Any]] = []
 
