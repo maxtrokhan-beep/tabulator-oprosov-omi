@@ -408,7 +408,7 @@ function renderListsForTabulation() {
   for (const v of vars) {
     const t = state.config.var_types[v.name] || defaultVarType(v.name);
     if (t === "service") continue;
-    rowItems.push({ id: v.name, label: `${v.name} — ${(v.question || "").slice(0, 70)}` });
+    rowItems.push({ id: v.name, label: `${v.name} — ${v.question || ""}` });
   }
   for (const g of state.config.multi_groups || []) {
     rowItems.push({ id: g.name, label: `${g.name} — ${g.question || "множественный выбор"}` });
@@ -419,7 +419,7 @@ function renderListsForTabulation() {
   // и сгруппированные вопросы множественного выбора.
   for (const v of vars) {
     if (String(v.name).toLowerCase() === "weight") continue;
-    bannerItems.push({ id: v.name, label: `${v.name} — ${(v.question || "").slice(0, 70)}` });
+    bannerItems.push({ id: v.name, label: `${v.name} — ${v.question || ""}` });
   }
   for (const g of state.config.multi_groups || []) {
     bannerItems.push({ id: g.name, label: `${g.name} — ${g.question || "множественный выбор"}` });
